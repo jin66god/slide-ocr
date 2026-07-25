@@ -242,9 +242,9 @@ def health():
 @app.post("/capcode")
 def capcode(req: CapRequest, _: None = Depends(verify_api_key)) -> dict:
     """
-    滑块识别（需鉴权，除非 REQUIRE_API_KEY=0 且未设 API_KEY）。
+    滑块识别（需鉴权）。
 
-    成功: {"result": <float>}
+    成功: {"result": <float>, "confidence": <float>, "candidates": [...]}
     失败: {"error": "出现错误: ..."}
     未授权: HTTP 401
     """
@@ -258,33 +258,52 @@ def capcode(req: CapRequest, _: None = Depends(verify_api_key)) -> dict:
     try:
         ocr = get_ocr()
         last_err: Optional[Exception] = None
-        x: Optional[float] = None
-        modes = [True, False] if SIMPLE_TARGET else [False, True]
-        for st in modes:
+        candidates: list[dict] = []
+
+        for st in (True, False):
             try:
                 try:
                     res = ocr.slide_match(block, bg, simple_target=st)
                 except TypeError:
                     res = ocr.slide_match(block, bg)
                 x = parse_slide_x(res)
+                conf = 0.0
+                if isinstance(res, dict):
+                    conf = float(res.get("confidence") or res.get("score") or 0.0)
                 if x is not None and x > 0:
-                    break
+                    candidates.append(
+                        {
+                            "x": round(float(x), 1),
+                            "confidence": conf,
+                            "simple_target": st,
+                        }
+                    )
             except Exception as e:
                 last_err = e
                 continue
 
-        if x is None or x <= 0:
+        if not candidates:
             raise RuntimeError(last_err or "no valid x")
 
-        x_out = round(float(x), 1)
+        # 按 confidence 选最优；置信度都接近 0 时仍取最高
+        candidates.sort(key=lambda c: c["confidence"], reverse=True)
+        best = candidates[0]
+        x_out = float(best["x"])
+
         log.info(
-            "capcode ok x=%s block=%dB bg=%dB cost=%.3fs",
+            "capcode ok x=%s conf=%.4f cands=%s block=%dB bg=%dB cost=%.3fs",
             x_out,
+            best["confidence"],
+            [(c["x"], round(c["confidence"], 3)) for c in candidates],
             len(block),
             len(bg),
             time.time() - t0,
         )
-        return {"result": x_out}
+        return {
+            "result": x_out,
+            "confidence": best["confidence"],
+            "candidates": candidates,
+        }
     except Exception as e:
         log.warning("capcode fail: %s", e)
         return {"error": f"出现错误: {e}"}
