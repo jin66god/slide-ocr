@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 用法: bash scripts/test-capcode.sh [BASE_URL]
 set -euo pipefail
-BASE="${1:-http://127.0.0.1:8000}"
+BASE="${1:-http://127.0.0.1:8118}"
 BASE="${BASE%/}"
 
 echo "== GET / =="

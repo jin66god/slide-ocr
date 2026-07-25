@@ -5,7 +5,7 @@
 兼容青龙/脚本圈常见 **CAPCODE** 协议，可直接给「草原云」等脚本使用：
 
 ```bash
-export CAPCODE_URL='http://你的服务器IP:8000/capcode'
+export CAPCODE_URL='http://你的服务器IP:8118/capcode'
 ```
 
 | 项目 | 说明 |
@@ -52,7 +52,7 @@ cd slide-ocr
 ### 2. 启动
 
 ```bash
-# 默认端口 8000，2 个 worker
+# 默认端口 8118，2 个 worker
 docker compose up -d --build
 
 # 4C24G 可加大 worker
@@ -62,16 +62,16 @@ WORKERS=4 docker compose up -d --build
 ### 3. 验证
 
 ```bash
-curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8118/health
 # {"status":"ok","engine":"ddddocr","ddddocr_version":"1.6.1",...}
 
-bash scripts/test-capcode.sh http://127.0.0.1:8000
+bash scripts/test-capcode.sh http://127.0.0.1:8118
 ```
 
 ### 4. 给业务脚本用
 
 ```bash
-export CAPCODE_URL='http://你的服务器公网或内网IP:8000/capcode'
+export CAPCODE_URL='http://你的服务器公网或内网IP:8118/capcode'
 ```
 
 ---
@@ -123,7 +123,7 @@ Content-Type: application/json
 
 | 变量 | 默认 | 说明 |
 |------|------|------|
-| `PORT` | `8000` | 宿主机映射端口 |
+| `PORT` | `8118` | 宿主机映射端口 |
 | `WORKERS` | `2` | uvicorn workers（4C 建议 2~4） |
 | `SIMPLE_TARGET` | `1` | `slide_match(simple_target=True)` |
 | `HTTP_TIMEOUT` | `20` | 拉取远程图片超时（秒） |
@@ -180,7 +180,7 @@ cd app
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1
+uvicorn main:app --host 0.0.0.0 --port 8118 --workers 1
 ```
 
 ---

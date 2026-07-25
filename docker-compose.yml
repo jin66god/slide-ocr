@@ -6,10 +6,10 @@ services:
     container_name: slide-ocr
     restart: unless-stopped
     ports:
-      - "${PORT:-8000}:8000"
+      - "${PORT:-8118}:8118"
     environment:
       HOST: "0.0.0.0"
-      PORT: "8000"
+      PORT: "8118"
       WORKERS: "${WORKERS:-2}"
       SIMPLE_TARGET: "${SIMPLE_TARGET:-1}"
       LOG_LEVEL: "${LOG_LEVEL:-INFO}"
@@ -17,7 +17,7 @@ services:
     mem_limit: ${MEM_LIMIT:-8g}
     cpus: ${CPUS:-3.5}
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8118/health"]
       interval: 30s
       timeout: 10s
       retries: 5

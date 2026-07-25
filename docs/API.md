@@ -1,6 +1,6 @@
 # API 文档
 
-Base URL 示例：`http://127.0.0.1:8000`
+Base URL 示例：`http://127.0.0.1:8118`
 
 ## `GET /`
 
@@ -73,7 +73,7 @@ Content-Type: application/json
 ### curl
 
 ```bash
-curl -X POST http://127.0.0.1:8000/capcode \
+curl -X POST http://127.0.0.1:8118/capcode \
   -H "Content-Type: application/json" \
   -d '{"slidingImage":"https://..._block.png","backImage":"https://....png"}'
 ```
@@ -81,14 +81,14 @@ curl -X POST http://127.0.0.1:8000/capcode \
 ### 青龙 / 草原云
 
 ```bash
-export CAPCODE_URL='http://你的服务器IP:8000/capcode'
+export CAPCODE_URL='http://你的服务器IP:8118/capcode'
 ```
 
 ## 环境变量
 
 | 变量 | 默认 | 说明 |
 |------|------|------|
-| `PORT` | `8000` | 监听端口 |
+| `PORT` | `8118` | 监听端口 |
 | `HOST` | `0.0.0.0` | 绑定地址 |
 | `WORKERS` | `2` | uvicorn worker 数 |
 | `SIMPLE_TARGET` | `1` | ddddocr `simple_target`，`0` 关闭 |
