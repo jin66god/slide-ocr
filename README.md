@@ -1,47 +1,30 @@
 # slide-ocr
 
-基于 **[sml2h3/ddddocr](https://github.com/sml2h3/ddddocr)** 官方 SDK 的滑块验证码识别 HTTP 服务（FastAPI + Docker）。
+基于 **[sml2h3/ddddocr](https://github.com/sml2h3/ddddocr)** 官方 SDK 的**滑块验证码识别 HTTP 服务**（FastAPI + Docker）。
 
-兼容青龙/脚本圈常见 **CAPCODE** 协议，并带 **API Key 鉴权**，避免公网地址被滥用。
-
-```bash
-export CAPCODE_URL='http://你的服务器IP:8118/capcode'
-export CAPCODE_API_KEY='你的密钥'
-```
+纯通用服务：上传/传入滑块图与背景图，返回缺口 **x** 坐标。带 **API Key 鉴权**，避免公网被刷。
 
 | 项目 | 说明 |
 |------|------|
-| OCR SDK | [sml2h3/ddddocr](https://github.com/sml2h3/ddddocr) · PyPI `ddddocr>=1.6.1` |
+| OCR SDK | [sml2h3/ddddocr](https://github.com/sml2h3/ddddocr) · `ddddocr>=1.6.1` |
 | Web | FastAPI + uvicorn |
-| 端口默认 | **8118** |
-| 鉴权 | `API_KEY` + Header `X-API-Key` / `Authorization: Bearer` |
-| 协议 | `POST /capcode` → `{"result": x}` |
+| 默认端口 | **8118** |
+| 鉴权 | `API_KEY` + `X-API-Key` / `Authorization: Bearer` |
+| 接口 | `POST /capcode` → `{"result": x}` |
 
 ---
 
-## 安全说明（为什么要鉴权）
+## 功能
 
-如果只暴露：
-
-```text
-http://IP:8118/capcode
-```
-
-任何人都能刷识别接口，白白吃你的 CPU/带宽。  
-因此本服务 **默认强制 API Key**：
-
-- 未带密钥 / 密钥错误 → **401**
-- 服务端没配 `API_KEY` → **503**（拒绝无密钥上线）
-
-本地调试才允许：
-
-```bash
-REQUIRE_API_KEY=0   # 不推荐公网
-```
+- `slide_match` 滑块缺口定位（官方 ddddocr）
+- 支持图片 **URL / base64 / dataURL**
+- API Key 鉴权（默认强制）
+- Docker / docker compose 一键部署
+- 健康检查：`GET /health`
 
 ---
 
-## 快速开始（Docker）
+## 快速开始
 
 ### 1. 克隆
 
@@ -50,21 +33,19 @@ git clone https://github.com/jin66god/slide-ocr.git
 cd slide-ocr
 ```
 
-### 2. 配置密钥
+### 2. 配置
 
 ```bash
 cp .env.example .env
-# 编辑 .env，至少改 API_KEY
-# 生成示例:
-#   openssl rand -hex 24
+# 生成密钥
+openssl rand -hex 24
+# 写入 .env 的 API_KEY=...
 ```
-
-`.env` 关键项：
 
 ```bash
 PORT=8118
 WORKERS=2
-API_KEY=换成你自己的长随机串
+API_KEY=你的长随机串
 REQUIRE_API_KEY=1
 ```
 
@@ -74,46 +55,38 @@ REQUIRE_API_KEY=1
 docker compose up -d --build
 ```
 
-### 4. 验证
+### 4. 调用
 
 ```bash
-# 健康检查（无需密钥）
+# 探活（无需密钥）
 curl http://127.0.0.1:8118/health
 
-# 无密钥应 401
-curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8118/capcode \
-  -H "Content-Type: application/json" \
-  -d '{"slidingImage":"x","backImage":"y"}'
-
-# 带密钥
+# 识别（需要密钥）
 curl -X POST http://127.0.0.1:8118/capcode \
   -H "Content-Type: application/json" \
   -H "X-API-Key: 你的密钥" \
-  -d '{"slidingImage":"https://..._block.png","backImage":"https://....png"}'
+  -d '{
+    "slidingImage": "https://example.com/block.png",
+    "backImage": "https://example.com/bg.jpg"
+  }'
 ```
 
-### 5. 业务脚本
+成功示例：
 
-```bash
-export CAPCODE_URL='http://你的IP:8118/capcode'
-export CAPCODE_API_KEY='你的密钥'
+```json
+{"result": 175.0}
 ```
 
-请求头：
-
-```http
-X-API-Key: 你的密钥
-```
+无密钥 / 密钥错误 → **HTTP 401**。
 
 ---
 
-## 目录结构
+## 目录
 
 ```text
 slide-ocr/
-├── app/
-│   ├── main.py
-│   └── requirements.txt
+├── app/main.py
+├── app/requirements.txt
 ├── docs/API.md
 ├── scripts/test-capcode.sh
 ├── Dockerfile
@@ -125,7 +98,7 @@ slide-ocr/
 
 ---
 
-## API 摘要
+## API
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |------|------|------|------|
@@ -133,26 +106,15 @@ slide-ocr/
 | GET | `/health` | 否 | 引擎健康 |
 | POST | `/capcode` | **是** | 滑块识别 |
 
-成功响应：
+### 传 Key（任选）
 
-```json
-{"result": 175.0}
-```
-
-完整字段与错误码见 [docs/API.md](./docs/API.md)。
-
-### 传 Key 的三种方式
-
-```bash
-# 1) 推荐
--H "X-API-Key: SECRET"
-
-# 2)
--H "Authorization: Bearer SECRET"
-
-# 3) 不推荐写在 URL 日志里
+```http
+X-API-Key: SECRET
+Authorization: Bearer SECRET
 POST /capcode?api_key=SECRET
 ```
+
+完整说明：[docs/API.md](./docs/API.md)
 
 ---
 
@@ -161,12 +123,12 @@ POST /capcode?api_key=SECRET
 | 变量 | 默认 | 说明 |
 |------|------|------|
 | `PORT` | `8118` | 宿主机端口 |
-| `WORKERS` | `2` | worker 数（4C 建议 2~4） |
+| `WORKERS` | `2` | uvicorn workers |
 | `API_KEY` | — | **生产必填** |
-| `REQUIRE_API_KEY` | `1` | 强制鉴权 |
-| `SIMPLE_TARGET` | `1` | ddddocr simple_target |
-| `HTTP_TIMEOUT` | `20` | 拉图超时 |
-| `LOG_LEVEL` | `INFO` | 日志 |
+| `REQUIRE_API_KEY` | `1` | 强制鉴权；`0` 仅本地调试 |
+| `SIMPLE_TARGET` | `1` | ddddocr `simple_target` |
+| `HTTP_TIMEOUT` | `20` | 远程拉图超时（秒） |
+| `LOG_LEVEL` | `INFO` | 日志级别 |
 | `MEM_LIMIT` | `8g` | 容器内存上限 |
 | `CPUS` | `3.5` | 容器 CPU 上限 |
 
@@ -176,9 +138,11 @@ POST /capcode?api_key=SECRET
 
 | 配置 | 说明 |
 |------|------|
-| 1C1G | 可跑，1 worker + swap |
+| 1C1G | 可跑，建议 1 worker + swap |
 | 2C4G | 日常够用 |
-| 4C24G | `WORKERS=2~4` 很宽裕 |
+| 4C24G | `WORKERS=2~4` 宽裕 |
+
+模型常驻大约每 worker **0.5~1GB** 量级。
 
 ---
 
@@ -188,15 +152,13 @@ POST /capcode?api_key=SECRET
 docker logs -f slide-ocr
 docker compose restart
 docker compose down
-
-# 改密钥后
-# 编辑 .env 中 API_KEY，再:
+# 改 API_KEY 后
 docker compose up -d
 ```
 
 ---
 
-## 无 Docker 本地开发
+## 本地开发（无 Docker）
 
 Python ≥ 3.10：
 
@@ -205,7 +167,6 @@ cd app
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 export API_KEY=dev-secret
-export REQUIRE_API_KEY=1
 uvicorn main:app --host 0.0.0.0 --port 8118 --workers 1
 ```
 
@@ -213,19 +174,19 @@ uvicorn main:app --host 0.0.0.0 --port 8118 --workers 1
 
 ## 安全建议
 
-1. **务必设置强 `API_KEY`**，不要用 `change-me` 上线  
-2. 优先内网 / 安全组只放行你的青龙机器 IP  
-3. 生产可再加 Nginx 限流、HTTPS  
-4. 不要把 Key 提交进 Git  
-5. 仅用于你有权处理的验证码场景  
+1. 生产必须设置强 `API_KEY`  
+2. 安全组尽量只放行调用方 IP  
+3. 可再加 Nginx / HTTPS / 限流  
+4. 不要把密钥提交进 Git  
+5. 仅用于合法、授权场景  
 
 ---
 
 ## 致谢
 
 - [sml2h3/ddddocr](https://github.com/sml2h3/ddddocr)  
-- FastAPI / uvicorn  
+- [FastAPI](https://github.com/tiangolo/fastapi) · [uvicorn](https://github.com/encode/uvicorn)
 
 ## License
 
-[MIT](./LICENSE) — ddddocr 许可证以[上游](https://github.com/sml2h3/ddddocr)为准。
+[MIT](./LICENSE) — ddddocr 许可证以上游仓库为准。

@@ -4,12 +4,9 @@ Slide Captcha OCR Service
 =========================
 基于 sml2h3/ddddocr 官方 SDK 的滑块验证码识别 HTTP 服务。
 
-协议兼容常见青龙/脚本圈 CAPCODE 接口（如草原云原脚本 ocr 方法）:
-
     POST /capcode
     Content-Type: application/json
-    X-API-Key: <your-secret>          # 推荐
-    # 或 Authorization: Bearer <your-secret>
+    X-API-Key: <your-secret>
     {
       "slidingImage": "<滑块图 URL 或 base64 / dataURL>",
       "backImage":    "<背景图 URL 或 base64 / dataURL>"
@@ -24,9 +21,9 @@ Slide Captcha OCR Service
   - 未设置 API_KEY 时默认拒绝（REQUIRE_API_KEY=1），防止公网裸奔
   - 本地调试可设 REQUIRE_API_KEY=0 关闭强制
 
-SDK 来源:
-  - GitHub: https://github.com/sml2h3/ddddocr
-  - PyPI:   https://pypi.org/project/ddddocr/
+SDK:
+  - https://github.com/sml2h3/ddddocr
+  - https://pypi.org/project/ddddocr/
 """
 
 from __future__ import annotations
@@ -39,7 +36,7 @@ import time
 from typing import Any, Optional
 
 import httpx
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
@@ -55,13 +52,9 @@ SIMPLE_TARGET = os.environ.get("SIMPLE_TARGET", "1").strip() not in (
     "no",
 )
 
-# 鉴权：API_KEY / CAPCODE_API_KEY
 _API_KEY_RAW = (
-    os.environ.get("API_KEY")
-    or os.environ.get("CAPCODE_API_KEY")
-    or ""
+    os.environ.get("API_KEY") or os.environ.get("CAPCODE_API_KEY") or ""
 ).strip()
-# 是否强制要求密钥（默认是：没有密钥也不允许匿名打码）
 REQUIRE_API_KEY = os.environ.get("REQUIRE_API_KEY", "1").strip() not in (
     "0",
     "false",
@@ -169,7 +162,7 @@ def verify_api_key(
     api_key: Optional[str] = Query(None, description="可选：?api_key="),
 ) -> None:
     """
-    /capcode 鉴权依赖。
+    /capcode 鉴权。
 
     接受（任选其一）:
       - Header: X-API-Key: <key>
@@ -179,27 +172,21 @@ def verify_api_key(
     provided = _extract_key(x_api_key, authorization, api_key)
 
     if _API_KEY_RAW:
-        # 配置了密钥：必须匹配
         if not provided or not secrets.compare_digest(provided, _API_KEY_RAW):
             raise HTTPException(status_code=401, detail="unauthorized")
         return
 
-    # 未配置密钥
     if REQUIRE_API_KEY:
         raise HTTPException(
             status_code=503,
             detail="server misconfigured: set env API_KEY (auth required)",
         )
-    # 显式关闭强制鉴权（仅建议本地）
     return
 
 
-# ---------------------------------------------------------------------------
-# API
-# ---------------------------------------------------------------------------
 app = FastAPI(
     title="Slide Captcha OCR",
-    description="ddddocr slider OCR with API key auth (CAPCODE compatible)",
+    description="ddddocr-based slider captcha OCR with API key auth",
     version="1.1.0",
 )
 
@@ -255,7 +242,7 @@ def health():
 @app.post("/capcode")
 def capcode(req: CapRequest, _: None = Depends(verify_api_key)) -> dict:
     """
-    CAPCODE 兼容接口（需鉴权，除非 REQUIRE_API_KEY=0 且未设 API_KEY）。
+    滑块识别（需鉴权，除非 REQUIRE_API_KEY=0 且未设 API_KEY）。
 
     成功: {"result": <float>}
     失败: {"error": "出现错误: ..."}

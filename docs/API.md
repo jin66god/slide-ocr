@@ -2,24 +2,21 @@
 
 Base URL 示例：`http://127.0.0.1:8118`
 
-## 鉴权（重要）
+## 鉴权
 
-`/capcode` **默认需要 API Key**，防止公网地址泄露后被刷。
-
-在 `.env` 中设置：
+`/capcode` **默认需要 API Key**。
 
 ```bash
+# .env
 API_KEY=你的长随机密钥
 REQUIRE_API_KEY=1
 ```
-
-生成示例：
 
 ```bash
 openssl rand -hex 24
 ```
 
-### 传密钥方式（任选其一）
+### 传密钥（任选其一）
 
 | 方式 | 示例 |
 |------|------|
@@ -27,16 +24,16 @@ openssl rand -hex 24
 | Header `Authorization` | `Authorization: Bearer your-secret` |
 | Query | `POST /capcode?api_key=your-secret` |
 
-未带密钥或密钥错误 → **HTTP 401** `{"detail":"unauthorized"}`  
-服务端未配置 `API_KEY` 且 `REQUIRE_API_KEY=1` → **HTTP 503**（拒绝裸奔）
+| 状态 | 含义 |
+|------|------|
+| **401** | 未带密钥或密钥错误 |
+| **503** | 服务端未配置 `API_KEY` 且强制鉴权 |
 
-`GET /` 与 `GET /health` **不鉴权**（便于探活；不消耗识别算力也可考虑再收紧）。
+`GET /`、`GET /health` 默认不鉴权（探活）。
 
 ---
 
 ## `GET /`
-
-存活探测（无需密钥）。
 
 ```json
 {
@@ -49,8 +46,6 @@ openssl rand -hex 24
 ```
 
 ## `GET /health`
-
-引擎就绪（无需密钥）。
 
 ```json
 {
@@ -66,19 +61,24 @@ openssl rand -hex 24
 
 滑块识别（**需鉴权**）。
 
-### Request
+### 请求体
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `slidingImage` | string | 是 | 滑块图：URL / base64 / dataURL |
+| `slidingImage` | string | 是 | 滑块图：`http(s)` URL / 纯 base64 / dataURL |
 | `backImage` | string | 是 | 背景图：同上 |
 
 ```bash
 curl -X POST http://127.0.0.1:8118/capcode \
   -H "Content-Type: application/json" \
   -H "X-API-Key: your-secret" \
-  -d '{"slidingImage":"https://..._block.png","backImage":"https://....png"}'
+  -d '{
+    "slidingImage": "https://example.com/block.png",
+    "backImage": "https://example.com/bg.jpg"
+  }'
 ```
+
+### 响应
 
 成功：
 
@@ -92,17 +92,19 @@ curl -X POST http://127.0.0.1:8118/capcode \
 {"error": "出现错误: ..."}
 ```
 
-### 青龙 / 草原云
+`result` 为缺口在背景图坐标系下的 **x 像素**（与背景原图分辨率一致）。
+
+### 客户端示例
 
 ```bash
-export CAPCODE_URL='http://你的服务器IP:8118/capcode'
-export CAPCODE_API_KEY='your-secret'
-# 或
-export CAPCODE_URL='http://IP:8118/capcode'
-export CAPCODE_KEY='your-secret'
-```
+export SLIDE_OCR_URL='http://127.0.0.1:8118/capcode'
+export SLIDE_OCR_API_KEY='your-secret'
 
-脚本请求时应带 Header：`X-API-Key: $CAPCODE_API_KEY`
+curl -X POST "$SLIDE_OCR_URL" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $SLIDE_OCR_API_KEY" \
+  -d '{"slidingImage":"...","backImage":"..."}'
+```
 
 ---
 
@@ -112,8 +114,9 @@ export CAPCODE_KEY='your-secret'
 |------|------|------|
 | `PORT` | `8118` | 监听端口 |
 | `WORKERS` | `2` | uvicorn workers |
-| `API_KEY` | （空） | 访问密钥，**生产必填** |
-| `REQUIRE_API_KEY` | `1` | 强制鉴权；`0` 允许匿名（仅本地） |
-| `SIMPLE_TARGET` | `1` | ddddocr simple_target |
-| `HTTP_TIMEOUT` | `20` | 下载远程图超时 |
+| `API_KEY` | （空） | 访问密钥，生产必填 |
+| `REQUIRE_API_KEY` | `1` | 强制鉴权 |
+| `SIMPLE_TARGET` | `1` | ddddocr `simple_target` |
+| `HTTP_TIMEOUT` | `20` | 下载远程图超时（秒） |
+| `MAX_IMAGE_BYTES` | `8388608` | 单图大小上限 |
 | `LOG_LEVEL` | `INFO` | 日志级别 |

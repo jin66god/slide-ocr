@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # 用法:
-#   export CAPCODE_API_KEY='your-secret'
+#   export API_KEY='your-secret'   # 或 CAPCODE_API_KEY
 #   bash scripts/test-capcode.sh [BASE_URL]
+#   TEST_BLOCK=... TEST_BG=... bash scripts/test-capcode.sh
 set -euo pipefail
 BASE="${1:-http://127.0.0.1:8118}"
 BASE="${BASE%/}"
-KEY="${CAPCODE_API_KEY:-${API_KEY:-}}"
+KEY="${API_KEY:-${CAPCODE_API_KEY:-}}"
 
 echo "== GET / =="
 curl -fsS "${BASE}/" ; echo
@@ -21,18 +22,25 @@ echo "HTTP $code  body=$(head -c 200 /tmp/cap_noauth.json 2>/dev/null)"
 echo
 
 if [[ -z "$KEY" ]]; then
-  echo "跳过带密钥测试：请 export CAPCODE_API_KEY=你的密钥"
+  echo "跳过带密钥识别测试：请 export API_KEY=你的密钥"
+  echo "完整识别还需提供可访问的图片 URL："
+  echo "  TEST_BLOCK=... TEST_BG=... bash scripts/test-capcode.sh"
   exit 0
 fi
 
-BLOCK="${TEST_BLOCK:-https://ys-oss.iyunxh.com/captcha/block/05b656cde974bb1a7ce072a05bab6fd5_block.png}"
-BG="${TEST_BG:-https://ys-oss.iyunxh.com/captcha/block/05b656cde974bb1a7ce072a05bab6fd5.png}"
+if [[ -z "${TEST_BLOCK:-}" || -z "${TEST_BG:-}" ]]; then
+  echo "已设置 API_KEY，但未设置 TEST_BLOCK / TEST_BG，跳过真实识图。"
+  echo "示例:"
+  echo "  TEST_BLOCK='https://example.com/block.png' \\"
+  echo "  TEST_BG='https://example.com/bg.jpg' \\"
+  echo "  API_KEY=*** bash scripts/test-capcode.sh"
+  exit 0
+fi
 
 echo "== POST /capcode with X-API-Key =="
 curl -fsS -X POST "${BASE}/capcode" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: ${KEY}" \
-  -d "{\"slidingImage\":\"${BLOCK}\",\"backImage\":\"${BG}\"}"
+  -d "{\"slidingImage\":\"${TEST_BLOCK}\",\"backImage\":\"${TEST_BG}\"}"
 echo
-echo "CAPCODE_URL=${BASE}/capcode"
-echo "CAPCODE_API_KEY=***"
+echo "OK · endpoint=${BASE}/capcode"
