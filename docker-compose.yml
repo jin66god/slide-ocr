@@ -1,0 +1,24 @@
+# 4C24G 推荐 WORKERS=2 或 4
+services:
+  slide-ocr:
+    build: .
+    image: slide-ocr:latest
+    container_name: slide-ocr
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "8000"
+      WORKERS: "${WORKERS:-2}"
+      SIMPLE_TARGET: "${SIMPLE_TARGET:-1}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      HTTP_TIMEOUT: "${HTTP_TIMEOUT:-20}"
+    mem_limit: ${MEM_LIMIT:-8g}
+    cpus: ${CPUS:-3.5}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
