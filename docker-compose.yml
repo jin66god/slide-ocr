@@ -14,6 +14,9 @@ services:
       SIMPLE_TARGET: "${SIMPLE_TARGET:-1}"
       LOG_LEVEL: "${LOG_LEVEL:-INFO}"
       HTTP_TIMEOUT: "${HTTP_TIMEOUT:-20}"
+      # 鉴权：务必改成你自己的密钥
+      API_KEY: "${API_KEY:-}"
+      REQUIRE_API_KEY: "${REQUIRE_API_KEY:-1}"
     mem_limit: ${MEM_LIMIT:-8g}
     cpus: ${CPUS:-3.5}
     healthcheck:

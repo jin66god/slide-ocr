@@ -2,45 +2,46 @@
 
 基于 **[sml2h3/ddddocr](https://github.com/sml2h3/ddddocr)** 官方 SDK 的滑块验证码识别 HTTP 服务（FastAPI + Docker）。
 
-兼容青龙/脚本圈常见 **CAPCODE** 协议，可直接给「草原云」等脚本使用：
+兼容青龙/脚本圈常见 **CAPCODE** 协议，并带 **API Key 鉴权**，避免公网地址被滥用。
 
 ```bash
 export CAPCODE_URL='http://你的服务器IP:8118/capcode'
+export CAPCODE_API_KEY='你的密钥'
 ```
 
 | 项目 | 说明 |
 |------|------|
-| OCR SDK | [sml2h3/ddddocr](https://github.com/sml2h3/ddddocr) · PyPI [`ddddocr`](https://pypi.org/project/ddddocr/) |
-| 本仓库锁定 | `ddddocr>=1.6.1,<2.0`（PyPI 当前最新稳定 **1.6.1**，Python ≥3.10） |
-| Web 框架 | FastAPI + uvicorn |
-| 部署 | Docker / docker compose |
+| OCR SDK | [sml2h3/ddddocr](https://github.com/sml2h3/ddddocr) · PyPI `ddddocr>=1.6.1` |
+| Web | FastAPI + uvicorn |
+| 端口默认 | **8118** |
+| 鉴权 | `API_KEY` + Header `X-API-Key` / `Authorization: Bearer` |
 | 协议 | `POST /capcode` → `{"result": x}` |
-
-> **是的：用的就是 sml2h3/ddddocr 官方包**，不是魔改 fork。版本以 PyPI 为准；升级时改 `app/requirements.txt` 后重新 build 即可。
 
 ---
 
-## 目录结构
+## 安全说明（为什么要鉴权）
+
+如果只暴露：
 
 ```text
-slide-ocr/
-├── app/
-│   ├── main.py              # FastAPI 服务
-│   └── requirements.txt     # 依赖（含最新 ddddocr）
-├── docs/
-│   └── API.md               # 接口说明
-├── scripts/
-│   └── test-capcode.sh      # 自测脚本
-├── Dockerfile
-├── docker-compose.yml
-├── .env.example
-├── LICENSE                  # MIT
-└── README.md
+http://IP:8118/capcode
+```
+
+任何人都能刷识别接口，白白吃你的 CPU/带宽。  
+因此本服务 **默认强制 API Key**：
+
+- 未带密钥 / 密钥错误 → **401**
+- 服务端没配 `API_KEY` → **503**（拒绝无密钥上线）
+
+本地调试才允许：
+
+```bash
+REQUIRE_API_KEY=0   # 不推荐公网
 ```
 
 ---
 
-## 快速开始（Docker，推荐）
+## 快速开始（Docker）
 
 ### 1. 克隆
 
@@ -49,73 +50,109 @@ git clone https://github.com/jin66god/slide-ocr.git
 cd slide-ocr
 ```
 
-### 2. 启动
+### 2. 配置密钥
 
 ```bash
-# 默认端口 8118，2 个 worker
+cp .env.example .env
+# 编辑 .env，至少改 API_KEY
+# 生成示例:
+#   openssl rand -hex 24
+```
+
+`.env` 关键项：
+
+```bash
+PORT=8118
+WORKERS=2
+API_KEY=换成你自己的长随机串
+REQUIRE_API_KEY=1
+```
+
+### 3. 启动
+
+```bash
 docker compose up -d --build
-
-# 4C24G 可加大 worker
-WORKERS=4 docker compose up -d --build
 ```
 
-### 3. 验证
+### 4. 验证
 
 ```bash
+# 健康检查（无需密钥）
 curl http://127.0.0.1:8118/health
-# {"status":"ok","engine":"ddddocr","ddddocr_version":"1.6.1",...}
 
-bash scripts/test-capcode.sh http://127.0.0.1:8118
+# 无密钥应 401
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8118/capcode \
+  -H "Content-Type: application/json" \
+  -d '{"slidingImage":"x","backImage":"y"}'
+
+# 带密钥
+curl -X POST http://127.0.0.1:8118/capcode \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: 你的密钥" \
+  -d '{"slidingImage":"https://..._block.png","backImage":"https://....png"}'
 ```
 
-### 4. 给业务脚本用
+### 5. 业务脚本
 
 ```bash
-export CAPCODE_URL='http://你的服务器公网或内网IP:8118/capcode'
+export CAPCODE_URL='http://你的IP:8118/capcode'
+export CAPCODE_API_KEY='你的密钥'
+```
+
+请求头：
+
+```http
+X-API-Key: 你的密钥
+```
+
+---
+
+## 目录结构
+
+```text
+slide-ocr/
+├── app/
+│   ├── main.py
+│   └── requirements.txt
+├── docs/API.md
+├── scripts/test-capcode.sh
+├── Dockerfile
+├── docker-compose.yml
+├── .env.example
+├── LICENSE
+└── README.md
 ```
 
 ---
 
 ## API 摘要
 
-### `POST /capcode`
+| 方法 | 路径 | 鉴权 | 说明 |
+|------|------|------|------|
+| GET | `/` | 否 | 存活 |
+| GET | `/health` | 否 | 引擎健康 |
+| POST | `/capcode` | **是** | 滑块识别 |
 
-```http
-Content-Type: application/json
-
-{
-  "slidingImage": "https://.../xxx_block.png",
-  "backImage": "https://.../xxx.png"
-}
-```
-
-成功：
+成功响应：
 
 ```json
 {"result": 175.0}
 ```
 
-失败：
+完整字段与错误码见 [docs/API.md](./docs/API.md)。
 
-```json
-{"error": "出现错误: ..."}
+### 传 Key 的三种方式
+
+```bash
+# 1) 推荐
+-H "X-API-Key: SECRET"
+
+# 2)
+-H "Authorization: Bearer SECRET"
+
+# 3) 不推荐写在 URL 日志里
+POST /capcode?api_key=SECRET
 ```
-
-`slidingImage` / `backImage` 支持：
-
-- `http://` / `https://` 图片链接  
-- 纯 base64  
-- `data:image/png;base64,...`
-
-完整说明见 [docs/API.md](./docs/API.md)。
-
-### 其它端点
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/` | 存活 |
-| GET | `/health` | 引擎健康（会加载模型） |
-| POST | `/capcode` | 滑块识别 |
 
 ---
 
@@ -123,97 +160,72 @@ Content-Type: application/json
 
 | 变量 | 默认 | 说明 |
 |------|------|------|
-| `PORT` | `8118` | 宿主机映射端口 |
-| `WORKERS` | `2` | uvicorn workers（4C 建议 2~4） |
-| `SIMPLE_TARGET` | `1` | `slide_match(simple_target=True)` |
-| `HTTP_TIMEOUT` | `20` | 拉取远程图片超时（秒） |
-| `LOG_LEVEL` | `INFO` | 日志级别 |
-| `MEM_LIMIT` | `8g` | 容器内存上限（compose） |
-| `CPUS` | `3.5` | 容器 CPU 上限（compose） |
-
-示例：
-
-```bash
-cp .env.example .env
-# 编辑 .env 后
-docker compose up -d --build
-```
+| `PORT` | `8118` | 宿主机端口 |
+| `WORKERS` | `2` | worker 数（4C 建议 2~4） |
+| `API_KEY` | — | **生产必填** |
+| `REQUIRE_API_KEY` | `1` | 强制鉴权 |
+| `SIMPLE_TARGET` | `1` | ddddocr simple_target |
+| `HTTP_TIMEOUT` | `20` | 拉图超时 |
+| `LOG_LEVEL` | `INFO` | 日志 |
+| `MEM_LIMIT` | `8g` | 容器内存上限 |
+| `CPUS` | `3.5` | 容器 CPU 上限 |
 
 ---
 
 ## 资源建议
 
-| 配置 | 是否合适 |
-|------|----------|
-| 1C1G | 可跑，建议 1 worker + swap，低并发 |
-| 2C4G | 日常自用够用 |
-| **4C24G** | **很宽裕**，`WORKERS=2~4` |
-
-ddddocr 滑块模型常驻大约 **每 worker 0.5~1GB** 量级；内存大头在模型，不在 FastAPI。
+| 配置 | 说明 |
+|------|------|
+| 1C1G | 可跑，1 worker + swap |
+| 2C4G | 日常够用 |
+| 4C24G | `WORKERS=2~4` 很宽裕 |
 
 ---
 
-## 常用运维
+## 运维
 
 ```bash
-# 日志
 docker logs -f slide-ocr
-
-# 重启
 docker compose restart
-
-# 停掉
 docker compose down
 
-# 升级 ddddocr：改 app/requirements.txt 后
-docker compose up -d --build
+# 改密钥后
+# 编辑 .env 中 API_KEY，再:
+docker compose up -d
 ```
 
 ---
 
-## 无 Docker 本地跑（开发）
+## 无 Docker 本地开发
 
-需要 Python **≥3.10**（ddddocr 1.6.x 要求）。
+Python ≥ 3.10：
 
 ```bash
 cd app
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+export API_KEY=dev-secret
+export REQUIRE_API_KEY=1
 uvicorn main:app --host 0.0.0.0 --port 8118 --workers 1
 ```
 
 ---
 
-## 与「公网 dcfocr」的关系
-
-部分脚本默认：
-
-```text
-http://dcfocr.20232024.xyz/capcode
-```
-
-那是**第三方私有打码站**，协议与本服务相同（`slidingImage` + `backImage` → `result`），但**不是开源项目**，可用性不保证。
-
-本仓库是你自己可控的开源替代，算法侧使用官方 **ddddocr**。
-
----
-
 ## 安全建议
 
-- 生产环境不要把服务无鉴权裸奔公网；优先 **内网 / VPN / 反代 + Token**。
-- 仅用于你有权处理的验证码场景，遵守目标站点与当地法律。
-- 本项目 **MIT**；ddddocr 本身许可证与依赖以 [上游仓库](https://github.com/sml2h3/ddddocr) 为准。
+1. **务必设置强 `API_KEY`**，不要用 `change-me` 上线  
+2. 优先内网 / 安全组只放行你的青龙机器 IP  
+3. 生产可再加 Nginx 限流、HTTPS  
+4. 不要把 Key 提交进 Git  
+5. 仅用于你有权处理的验证码场景  
 
 ---
 
 ## 致谢
 
-- [sml2h3/ddddocr](https://github.com/sml2h3/ddddocr) — 验证码识别 SDK  
-- [FastAPI](https://github.com/tiangolo/fastapi) · [uvicorn](https://github.com/encode/uvicorn)
-
----
+- [sml2h3/ddddocr](https://github.com/sml2h3/ddddocr)  
+- FastAPI / uvicorn  
 
 ## License
 
-[MIT](./LICENSE)
+[MIT](./LICENSE) — ddddocr 许可证以[上游](https://github.com/sml2h3/ddddocr)为准。
